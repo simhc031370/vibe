@@ -5,14 +5,11 @@ import { parseUpload } from './lib/parseUpload';
 import { emptyLine, type ExportRow, type LineItem } from './lib/types';
 
 const COLUMNS = [
-  { key: 'content', label: '* 내용', kind: 'text' },
-  { key: 's2b', label: 'S2B물품번호', kind: 'text' },
-  { key: 'spec', label: '규격▲', kind: 'text' },
-  { key: 'qty', label: '수량', kind: 'number' },
+  { key: 'content', label: '내용', kind: 'text' },
+  { key: 'spec', label: '규격', kind: 'text' },
   { key: 'unit', label: '단위', kind: 'text' },
+  { key: 'qty', label: '수량', kind: 'number' },
   { key: 'unitPrice', label: '예상단가', kind: 'number' },
-  { key: 'amount', label: '* 예상금액', kind: 'number' },
-  { key: 'fee', label: '수수료', kind: 'number' },
 ] as const;
 
 type ColumnKey = (typeof COLUMNS)[number]['key'];
@@ -28,13 +25,8 @@ function amountsDiffer(item: LineItem): boolean {
 function toExportRows(items: LineItem[]): { rows: ExportRow[]; error: string | null } {
   const rows: ExportRow[] = [];
   for (const [index, item] of items.entries()) {
-    const numeric: Record<'qty' | 'unitPrice' | 'amount' | 'fee', number | null> = {
-      qty: null,
-      unitPrice: null,
-      amount: null,
-      fee: null,
-    };
-    for (const key of ['qty', 'unitPrice', 'amount', 'fee'] as const) {
+    const numeric: Record<'qty' | 'unitPrice', number | null> = { qty: null, unitPrice: null };
+    for (const key of ['qty', 'unitPrice'] as const) {
       const raw = item[key].trim();
       if (!raw) continue;
       const value = parseNumber(raw);
@@ -46,32 +38,20 @@ function toExportRows(items: LineItem[]): { rows: ExportRow[]; error: string | n
     }
     const row: ExportRow = {
       content: item.content.trim(),
-      s2b: item.s2b.trim(),
       spec: item.spec.trim(),
       unit: item.unit.trim(),
       qty: numeric.qty,
       unitPrice: numeric.unitPrice,
-      amount: numeric.amount,
-      fee: numeric.fee,
     };
-    const empty =
-      !row.content &&
-      !row.s2b &&
-      !row.spec &&
-      !row.unit &&
-      row.qty == null &&
-      row.unitPrice == null &&
-      row.amount == null &&
-      row.fee == null;
+    const empty = !row.content && !row.spec && !row.unit && row.qty == null && row.unitPrice == null;
     if (!empty) rows.push(row);
   }
   if (rows.length === 0) return { rows: [], error: '내려받을 품목이 없습니다.' };
   return { rows, error: null };
 }
 
-function downloadName(fileName: string | null): string {
-  const base = (fileName ?? '품목내역').replace(/\.[^.]+$/, '').trim() || '품목내역';
-  return `${base}_품목내역.xlsx`;
+function downloadName(): string {
+  return '품목내역(통합).xls';
 }
 
 export function App() {
@@ -116,18 +96,14 @@ export function App() {
     setError(null);
     setStatus('품목내역 파일을 만들고 있습니다.');
     try {
-      const template = await fetch('/template.xlsx');
-      if (!template.ok) throw new Error('서식을 불러오지 못했습니다.');
-      const bytes = await buildWorkbook(await template.arrayBuffer(), exported.rows);
+      const bytes = buildWorkbook(exported.rows);
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
-      const blob = new Blob([copy.buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
+      const blob = new Blob([copy.buffer], { type: 'application/vnd.ms-excel' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = downloadName(fileName);
+      link.download = downloadName();
       link.click();
       URL.revokeObjectURL(url);
     } catch (reason) {
@@ -137,8 +113,13 @@ export function App() {
     }
   }
 
-  const amountTotal = items.reduce((sum, item) => sum + (parseNumber(item.amount) ?? 0), 0);
-  const hasAmount = items.some((item) => parseNumber(item.amount) != null);
+  const products = items.flatMap((item) => {
+    const qty = parseNumber(item.qty);
+    const price = parseNumber(item.unitPrice);
+    return qty != null && price != null ? [qty * price] : [];
+  });
+  const hasAmount = products.length > 0;
+  const amountTotal = products.reduce((sum, value) => sum + value, 0);
 
   return (
     <div className="page">
@@ -151,8 +132,7 @@ export function App() {
           </div>
         </div>
         <p className="lede">
-          올린 파일에서 품목, 규격, 수량, 단가, 금액을 읽어 학교 품목내역 서식 그대로 엑셀 파일을 만듭니다.
-          머리글과 열 순서는 바꾸지 않고, 서식에 없는 열은 더하지 않습니다.
+          올린 파일에서 품목을 읽어 품목내역(통합) 서식으로 받습니다. 열은 내용, 규격, 단위, 수량, 예상단가입니다.
         </p>
       </header>
 
@@ -199,11 +179,11 @@ export function App() {
                 <h2 id="preview-title">읽어 온 품목</h2>
                 <p>
                   {fileName} · {items.length}건
-                  {hasAmount ? ` · 예상금액 합계 ${formatWon(amountTotal)}원` : ''}
+                  {hasAmount ? ` · 수량×예상단가 ${formatWon(amountTotal)}원` : ''}
                 </p>
               </div>
               <button type="button" className="primary" onClick={() => void download()}>
-                품목내역 엑셀 내려받기
+                품목내역(통합).xls 내려받기
               </button>
             </div>
 
@@ -217,10 +197,9 @@ export function App() {
 
             <div className="table-scroll">
               <table>
-                <caption>품목내역 서식과 같은 열입니다. 참고 칸은 엑셀에 들어가지 않습니다.</caption>
+                <caption>품목내역(통합)과 같은 다섯 열입니다. 참고 칸은 엑셀에 들어가지 않습니다.</caption>
                 <thead>
                   <tr>
-                    <th>순번</th>
                     {COLUMNS.map((column) => (
                       <th key={column.key}>{column.label}</th>
                     ))}
@@ -236,14 +215,13 @@ export function App() {
                 <tbody>
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="empty">
+                      <td colSpan={7} className="empty">
                         가져온 품목이 없습니다. 아래 버튼으로 직접 넣을 수 있습니다.
                       </td>
                     </tr>
                   )}
                   {items.map((item, index) => (
                     <tr key={item.id} className={amountsDiffer(item) ? 'mismatch' : undefined}>
-                      <td className="seq">{index + 1}</td>
                       {COLUMNS.map((column) => (
                         <td key={column.key} className={column.kind === 'number' ? 'num' : undefined}>
                           <input
@@ -252,8 +230,8 @@ export function App() {
                             value={item[column.key]}
                             onChange={(event) => update(item.id, column.key, event.target.value)}
                           />
-                          {column.key === 'amount' && amountsDiffer(item) && (
-                            <em>수량×단가와 다릅니다</em>
+                          {column.key === 'unitPrice' && amountsDiffer(item) && (
+                            <em>수량×단가와 공급금액이 다릅니다</em>
                           )}
                         </td>
                       ))}
@@ -272,9 +250,9 @@ export function App() {
                 {hasAmount && (
                   <tfoot>
                     <tr>
-                      <td colSpan={7}>예상금액 합계</td>
+                      <td colSpan={4}>수량×예상단가 합계. 엑셀에는 없습니다</td>
                       <td className="num total">{formatWon(amountTotal)}</td>
-                      <td colSpan={3} />
+                      <td colSpan={2} />
                     </tr>
                   </tfoot>
                 )}
@@ -285,7 +263,7 @@ export function App() {
               <button type="button" onClick={() => setItems((current) => [...current, emptyLine()])}>
                 품목 추가
               </button>
-              <p>칸을 고친 뒤 내려받으세요. S2B물품번호와 수수료는 서식에 있으나 칸 너비가 숨겨져 있습니다.</p>
+              <p>칸을 고친 뒤 내려받으세요. 파일 이름은 품목내역(통합).xls이고, 다섯 열 외에는 들어가지 않습니다.</p>
             </div>
 
             {previewText && (

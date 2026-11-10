@@ -14,13 +14,10 @@ export type LineItem = {
 
 export type ExportRow = {
   content: string;
-  s2b: string;
   spec: string;
-  qty: number | null;
   unit: string;
+  qty: number | null;
   unitPrice: number | null;
-  amount: number | null;
-  fee: number | null;
 };
 
 export type ParseResult = {

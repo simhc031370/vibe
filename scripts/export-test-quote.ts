@@ -20,14 +20,11 @@ const parsed = await parseSpreadsheet(asBuffer(readFileSync(quotePath)));
 if (parsed.error) throw new Error(parsed.error);
 const rows: ExportRow[] = parsed.items.map((item) => ({
   content: item.content,
-  s2b: item.s2b,
   spec: item.spec,
-  qty: parseNumber(item.qty),
   unit: item.unit,
+  qty: parseNumber(item.qty),
   unitPrice: parseNumber(item.unitPrice),
-  amount: parseNumber(item.amount),
-  fee: parseNumber(item.fee),
 }));
-const built = await buildWorkbook(asBuffer(readFileSync('public/template.xlsx')), rows);
+const built = buildWorkbook(rows);
 writeFileSync(outPath, built);
 console.log(JSON.stringify({ count: parsed.items.length, notices: parsed.notices, items: parsed.items }, null, 2));

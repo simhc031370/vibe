@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
+import * as XLSX from 'xlsx';
 import { buildWorkbook } from './buildWorkbook';
 import { extractFromGrid } from './extractItems';
+import { parseNumber } from './numbers';
 import { parseSpreadsheet } from './parseSpreadsheet';
 import { readSheets } from './xlsxRead';
 
 const QUOTE = '/cursor/stores/bc-68610600-4d81-451f-8bb0-3b093d5190e7/internal/금구중_10월_기자재견적서.xlsx';
-const TEMPLATE = path.resolve('public/template.xlsx');
 
 async function workbook(sheetXml: string): Promise<ArrayBuffer> {
   const zip = new JSZip();
@@ -155,55 +155,44 @@ describe('extract spreadsheet line items', () => {
         note: '납품실 진로활동실 · 날짜 10-28',
       },
     ]);
+    const built = buildWorkbook(parsed.items.map((item) => ({
+      content: item.content,
+      spec: item.spec,
+      unit: item.unit,
+      qty: parseNumber(item.qty),
+      unitPrice: parseNumber(item.unitPrice),
+    })));
+    const sheet = XLSX.read(built, { type: 'array' }).Sheets['품목내역'];
+    const rows = XLSX.utils.sheet_to_json<(string | number)[]>(sheet, { header: 1, raw: true, defval: '' });
+    expect(rows).toEqual([
+      ['내용', '규격', '단위', '수량', '예상단가'],
+      ['컬러토너 / 브라더 HL 8260(재생)', 'bk', '', 1, 60000],
+      ['토너 / 삼성 SL M3840(재생)', '', '', 1, 88000],
+      ['컬러토너 / 브라더 HL 8260(재생)', 'm  y', '', 2, 60000],
+      ['인터넷허브 / IPTIME H908', '', '', 1, 55000],
+      ['케이블 / HDMI(2.0) 10m', '', '', 1, 40000],
+    ]);
   });
 });
 
 describe('buildWorkbook', () => {
-  it('keeps the template sheet, headers, and column widths', async () => {
-    const template = readFileSync(TEMPLATE);
-    const templateBytes = template.buffer.slice(template.byteOffset, template.byteOffset + template.byteLength);
-    const original = await JSZip.loadAsync(templateBytes);
-    const originalSheet = await original.file('xl/worksheets/sheet1.xml')!.async('string');
-    const built = await buildWorkbook(templateBytes as ArrayBuffer, [
-      {
-        content: 'A & B <C>',
-        s2b: '00123',
-        spec: 'm  y',
-        qty: 2,
-        unit: '개',
-        unitPrice: 60000,
-        amount: 120000,
-        fee: null,
-      },
+  it('writes 품목내역(통합).xls with only the five template columns', () => {
+    const built = buildWorkbook([
+      { content: 'A & B <C>', spec: 'm  y', unit: '개', qty: 2, unitPrice: 60000 },
     ]);
-    const zipped = await JSZip.loadAsync(built);
-    for (const name of Object.keys(original.files)) {
-      if (original.files[name].dir || name === 'xl/worksheets/sheet1.xml') continue;
-      const before = await original.file(name)!.async('uint8array');
-      const after = await zipped.file(name)!.async('uint8array');
-      expect(Buffer.from(before).equals(Buffer.from(after)), name).toBe(true);
-    }
-    const sheet = await zipped.file('xl/worksheets/sheet1.xml')!.async('string');
-    expect(sheet.match(/<cols>[\s\S]*?<\/cols>/)?.[0]).toBe(originalSheet.match(/<cols>[\s\S]*?<\/cols>/)?.[0]);
-    expect(sheet.match(/<row r="3">[\s\S]*?<\/row>/)?.[0]).toBe(originalSheet.match(/<row r="3">[\s\S]*?<\/row>/)?.[0]);
-    expect(sheet).toContain('<dimension ref="A1:I4"/>');
-    expect(sheet).toContain('A &amp; B &lt;C&gt;');
-    expect(sheet).toContain('xml:space="preserve">m  y<');
-    expect(sheet).toContain('00123');
-    expect(sheet).not.toMatch(/<c r="J/);
-    expect(sheet).toContain('<mergeCell ref="A1:I1"/>');
-
-    const [grid] = await readSheets(built.buffer.slice(built.byteOffset, built.byteOffset + built.byteLength) as ArrayBuffer);
-    const extracted = extractFromGrid(grid);
-    expect(extracted.items[0]).toMatchObject({
-      content: 'A & B <C>',
-      s2b: '00123',
-      spec: 'm  y',
-      qty: '2',
-      unit: '개',
-      unitPrice: '60000',
-      amount: '120000',
-      fee: '',
+    expect([...built.slice(0, 4)]).toEqual([0xd0, 0xcf, 0x11, 0xe0]);
+    const workbook = XLSX.read(built, { type: 'array' });
+    expect(workbook.SheetNames).toEqual(['품목내역']);
+    const rows = XLSX.utils.sheet_to_json<(string | number)[]>(workbook.Sheets['품목내역'], {
+      header: 1,
+      raw: true,
+      defval: '',
     });
+    expect(rows).toEqual([
+      ['내용', '규격', '단위', '수량', '예상단가'],
+      ['A & B <C>', 'm  y', '개', 2, 60000],
+    ]);
+    expect(rows[0]).toHaveLength(5);
+    expect(rows[1]).toHaveLength(5);
   });
 });
