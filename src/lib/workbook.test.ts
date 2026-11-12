@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { find, read } from 'cfb';
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { buildWorkbook } from './buildWorkbook';
@@ -9,6 +12,32 @@ import { parseSpreadsheet } from './parseSpreadsheet';
 import { readSheets } from './xlsxRead';
 
 const QUOTE = '/cursor/stores/bc-68610600-4d81-451f-8bb0-3b093d5190e7/internal/금구중_10월_기자재견적서.xlsx';
+const TEMPLATE = resolve('public/품목내역(통합).xls');
+const STORE_TEMPLATE = '/cursor/stores/bc-68610600-4d81-451f-8bb0-3b093d5190e7/internal/품목내역(통합).xls';
+
+function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function templateBytes(): ArrayBuffer {
+  return arrayBuffer(readFileSync(TEMPLATE));
+}
+
+function workbookRecords(bytes: Uint8Array): { code: number; payload: Uint8Array }[] {
+  const container = read(bytes, { type: 'array' });
+  const entry = find(container, '/Workbook');
+  if (!entry || !(entry.content instanceof Uint8Array)) throw new Error('Workbook stream missing');
+  const data = entry.content;
+  const records: { code: number; payload: Uint8Array }[] = [];
+  let offset = 0;
+  while (offset + 4 <= data.length) {
+    const code = data[offset] | (data[offset + 1] << 8);
+    const length = data[offset + 2] | (data[offset + 3] << 8);
+    records.push({ code, payload: data.slice(offset + 4, offset + 4 + length) });
+    offset += 4 + length;
+  }
+  return records;
+}
 
 async function workbook(sheetXml: string): Promise<ArrayBuffer> {
   const zip = new JSZip();
@@ -155,7 +184,7 @@ describe('extract spreadsheet line items', () => {
         note: '납품실 진로활동실 · 날짜 10-28',
       },
     ]);
-    const built = buildWorkbook(parsed.items.map((item) => ({
+    const built = buildWorkbook(templateBytes(), parsed.items.map((item) => ({
       content: item.content,
       spec: item.spec,
       unit: item.unit,
@@ -176,8 +205,15 @@ describe('extract spreadsheet line items', () => {
 });
 
 describe('buildWorkbook', () => {
-  it('writes 품목내역(통합).xls with only the five template columns', () => {
-    const built = buildWorkbook([
+  it('keeps the uploaded template fonts, fills, widths, and five columns', () => {
+    const source = readFileSync(TEMPLATE);
+    try {
+      const stored = readFileSync(STORE_TEMPLATE);
+      expect(createHash('sha256').update(source).digest('hex')).toBe(createHash('sha256').update(stored).digest('hex'));
+    } catch {
+      // The store copy is the source of the committed template.
+    }
+    const built = buildWorkbook(arrayBuffer(source), [
       { content: 'A & B <C>', spec: 'm  y', unit: '개', qty: 2, unitPrice: 60000 },
     ]);
     expect([...built.slice(0, 4)]).toEqual([0xd0, 0xcf, 0x11, 0xe0]);
@@ -194,5 +230,63 @@ describe('buildWorkbook', () => {
     ]);
     expect(rows[0]).toHaveLength(5);
     expect(rows[1]).toHaveLength(5);
+
+    const before = workbookRecords(source);
+    const after = workbookRecords(built);
+    for (const code of [0x0031, 0x00e0, 0x0092, 0x007d, 0x041e]) {
+      const left = before.filter((record) => record.code === code).map((record) => [...record.payload]);
+      const right = after.filter((record) => record.code === code).map((record) => [...record.payload]);
+      expect(right).toEqual(left);
+    }
+    const name = (records: { code: number; payload: Uint8Array }[]) => {
+      const sheet = records.find((record) => record.code === 0x0085);
+      return sheet ? [...sheet.payload.slice(4)] : [];
+    };
+    expect(name(after)).toEqual(name(before));
+    const cells = after.filter((record) => record.code === 0x00fd || record.code === 0x0201 || record.code === 0x0203);
+    const cellAt = (row: number, column: number) => cells.find((record) => {
+      const rw = record.payload[0] | (record.payload[1] << 8);
+      const col = record.payload[2] | (record.payload[3] << 8);
+      return rw === row && col === column;
+    });
+    expect(cellAt(0, 0)?.payload[4]).toBe(21);
+    expect(cellAt(0, 4)?.payload[4]).toBe(22);
+    expect(cellAt(1, 0)?.code).toBe(0x00fd);
+    expect(cellAt(1, 0)?.payload[4]).toBe(23);
+    expect(cellAt(1, 1)?.payload[4]).toBe(24);
+    expect(cellAt(1, 2)?.code).toBe(0x00fd);
+    expect(cellAt(1, 2)?.payload[4]).toBe(24);
+    expect(cellAt(1, 3)?.code).toBe(0x0203);
+    expect(cellAt(1, 3)?.payload[4]).toBe(24);
+    expect(cellAt(1, 4)?.code).toBe(0x0203);
+    expect(cellAt(1, 4)?.payload[4]).toBe(25);
+    expect(cells.every((record) => (record.payload[2] | (record.payload[3] << 8)) < 5)).toBe(true);
+    const width = before.find((record) => record.code === 0x007d);
+    expect(width && (width.payload[4] | (width.payload[5] << 8))).toBe(3600);
+  });
+
+  it('returns the template unchanged when there are no rows', () => {
+    const source = readFileSync(TEMPLATE);
+    const built = buildWorkbook(arrayBuffer(source), []);
+    expect([...built]).toEqual([...source]);
+  });
+
+  it('splits a long string table across continue records', () => {
+    const rows = Array.from({ length: 250 }, (_, index) => ({
+      content: `품목 ${index} 브라더 토너`,
+      spec: index % 3 === 0 ? '' : `규격-${index}`,
+      unit: '',
+      qty: index + 1,
+      unitPrice: 1000 + index,
+    }));
+    const built = buildWorkbook(templateBytes(), rows);
+    const records = workbookRecords(built);
+    expect(records.some((record) => record.code === 0x003c)).toBe(true);
+    const sheet = XLSX.read(built, { type: 'array' }).Sheets['품목내역'];
+    const values = XLSX.utils.sheet_to_json<(string | number)[]>(sheet, { header: 1, raw: true, defval: '' });
+    expect(values).toHaveLength(251);
+    expect(values[249]).toEqual(['품목 248 브라더 토너', '규격-248', '', 249, 1248]);
+    expect(values[250]).toEqual(['품목 249 브라더 토너', '', '', 250, 1249]);
+    expect(values[1][1]).toBe('');
   });
 });

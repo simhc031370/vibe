@@ -154,17 +154,48 @@ h1 {
 
 .notices li + li { margin-top: 4px; }
 
-.table-scroll { overflow-x: auto; margin-top: 14px; }
+.ledger {
+  margin-top: 16px;
+  background: #f3f3f3;
+  border: 1px solid #b9b9b9;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+}
+
+.ledger-tab {
+  margin: 0;
+  width: fit-content;
+  padding: 6px 16px;
+  background: #fff;
+  border-right: 1px solid #b9b9b9;
+  border-bottom: 1px solid #fff;
+  color: #231f1b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.table-scroll { overflow-x: auto; background: white; }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 880px;
+  min-width: 720px;
+  font-family: Dotum, "돋움", "Malgun Gothic", sans-serif;
   font-size: 14px;
 }
 
 th:nth-child(1),
-td:nth-child(1) { min-width: 320px; }
+td:nth-child(1) { width: 36%; min-width: 280px; }
+
+th:nth-child(2),
+td:nth-child(2),
+th:nth-child(3),
+td:nth-child(3),
+th:nth-child(4),
+td:nth-child(4) { width: 14%; }
+
+th:nth-child(5),
+td:nth-child(5) { width: 22%; }
 
 caption, .sr {
   position: absolute;
@@ -175,20 +206,22 @@ caption, .sr {
 }
 
 th {
-  background: var(--header);
-  color: white;
-  font-weight: 650;
-  font-size: 12px;
+  background: #59595b;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
   text-align: center;
   padding: 8px 6px;
+  border: 1px solid #a4a4a5;
   white-space: nowrap;
 }
 
 td {
-  border-bottom: 1px solid var(--line);
+  border: 1px solid #d3d4d8;
   padding: 0;
   vertical-align: middle;
   background: white;
+  text-align: center;
 }
 
 .seq, .row-action, .note-col { text-align: center; }
@@ -199,11 +232,11 @@ td input {
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 9px 8px;
-  color: inherit;
+  padding: 10px 8px;
+  color: #111;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
-
-td.num input, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 td input:focus { outline: 2px solid var(--stamp); outline-offset: -2px; background: #fff; }
 
@@ -245,7 +278,19 @@ tfoot td {
 
 tfoot .total { text-align: right; }
 
-.sheet-actions { margin-top: 14px; align-items: center; }
+.ledger-sum {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.row-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sheet-actions { margin-top: 14px; align-items: center; flex-wrap: wrap; }
 
 button {
   border: 1px solid #c9c0b2;

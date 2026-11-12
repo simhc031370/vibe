@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buildWorkbook } from './lib/buildWorkbook';
 import { formatWon, parseNumber } from './lib/numbers';
 import { parseUpload } from './lib/parseUpload';
@@ -54,8 +54,38 @@ function downloadName(): string {
   return '품목내역(통합).xls';
 }
 
+function CellField({
+  label,
+  value,
+  numeric,
+  align,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  numeric: boolean;
+  align: 'center' | 'end';
+  onChange: (value: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const parsed = numeric ? parseNumber(value) : null;
+  const shown = numeric && !focused && parsed != null ? formatWon(parsed) : value;
+  return (
+    <input
+      aria-label={label}
+      inputMode={numeric ? 'decimal' : 'text'}
+      style={{ textAlign: align }}
+      value={shown}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [items, setItems] = useState<LineItem[]>([]);
   const [notices, setNotices] = useState<string[]>([]);
@@ -83,6 +113,10 @@ export function App() {
     if (inputRef.current) inputRef.current.value = '';
   }
 
+  useEffect(() => {
+    if (ready) sheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [ready, fileName]);
+
   function update(id: string, key: ColumnKey, value: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, [key]: value } : item)));
   }
@@ -96,7 +130,9 @@ export function App() {
     setError(null);
     setStatus('품목내역 파일을 만들고 있습니다.');
     try {
-      const bytes = buildWorkbook(exported.rows);
+      const response = await fetch(encodeURI('/품목내역(통합).xls'));
+      if (!response.ok) throw new Error('품목내역 서식을 불러오지 못했습니다.');
+      const bytes = buildWorkbook(await response.arrayBuffer(), exported.rows);
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
       const blob = new Blob([copy.buffer], { type: 'application/vnd.ms-excel' });
@@ -132,7 +168,7 @@ export function App() {
           </div>
         </div>
         <p className="lede">
-          올린 파일에서 품목을 읽어 품목내역(통합) 서식으로 받습니다. 열은 내용, 규격, 단위, 수량, 예상단가입니다.
+          파일을 올리면 이 화면에 품목내역이 채워집니다. 열은 내용, 규격, 단위, 수량, 예상단가이고, 같은 표를 엑셀로도 받습니다.
         </p>
       </header>
 
@@ -173,13 +209,12 @@ export function App() {
         )}
 
         {ready && (
-          <section className="sheet" aria-labelledby="preview-title">
+          <section className="sheet" aria-labelledby="preview-title" ref={sheetRef}>
             <div className="sheet-head">
               <div>
-                <h2 id="preview-title">읽어 온 품목</h2>
+                <h2 id="preview-title">품목내역</h2>
                 <p>
-                  {fileName} · {items.length}건
-                  {hasAmount ? ` · 수량×예상단가 ${formatWon(amountTotal)}원` : ''}
+                  {fileName}에서 채운 품목내역(통합) · {items.length}건
                 </p>
               </div>
               <button type="button" className="primary" onClick={() => void download()}>
@@ -195,75 +230,71 @@ export function App() {
               </ul>
             )}
 
-            <div className="table-scroll">
-              <table>
-                <caption>품목내역(통합)과 같은 다섯 열입니다. 참고 칸은 엑셀에 들어가지 않습니다.</caption>
-                <thead>
-                  <tr>
-                    {COLUMNS.map((column) => (
-                      <th key={column.key}>{column.label}</th>
-                    ))}
-                    <th className="note-col">
-                      참고
-                      <span>엑셀 미포함</span>
-                    </th>
-                    <th className="row-action">
-                      <span className="sr">행</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 && (
+            <div className="ledger">
+              <p className="ledger-tab">품목내역</p>
+              <div className="table-scroll">
+                <table>
+                  <caption>품목내역(통합)과 같은 다섯 열입니다.</caption>
+                  <thead>
                     <tr>
-                      <td colSpan={7} className="empty">
-                        가져온 품목이 없습니다. 아래 버튼으로 직접 넣을 수 있습니다.
-                      </td>
-                    </tr>
-                  )}
-                  {items.map((item, index) => (
-                    <tr key={item.id} className={amountsDiffer(item) ? 'mismatch' : undefined}>
                       {COLUMNS.map((column) => (
-                        <td key={column.key} className={column.kind === 'number' ? 'num' : undefined}>
-                          <input
-                            aria-label={`${index + 1}번 ${column.label}`}
-                            inputMode={column.kind === 'number' ? 'decimal' : 'text'}
-                            value={item[column.key]}
-                            onChange={(event) => update(item.id, column.key, event.target.value)}
-                          />
-                          {column.key === 'unitPrice' && amountsDiffer(item) && (
-                            <em>수량×단가와 공급금액이 다릅니다</em>
-                          )}
-                        </td>
+                        <th key={column.key} scope="col">
+                          {column.label}
+                        </th>
                       ))}
-                      <td className="note-col">{item.note}</td>
-                      <td className="row-action">
-                        <button
-                          type="button"
-                          onClick={() => setItems((current) => current.filter((row) => row.id !== item.id))}
-                        >
-                          삭제
-                        </button>
-                      </td>
                     </tr>
-                  ))}
-                </tbody>
-                {hasAmount && (
-                  <tfoot>
-                    <tr>
-                      <td colSpan={4}>수량×예상단가 합계. 엑셀에는 없습니다</td>
-                      <td className="num total">{formatWon(amountTotal)}</td>
-                      <td colSpan={2} />
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="empty">
+                          가져온 품목이 없습니다. 아래에서 직접 넣을 수 있습니다.
+                        </td>
+                      </tr>
+                    )}
+                    {items.map((item, index) => (
+                      <tr key={item.id} className={amountsDiffer(item) ? 'mismatch' : undefined}>
+                        {COLUMNS.map((column) => (
+                          <td key={column.key}>
+                            <CellField
+                              label={`${index + 1}번 ${column.label}`}
+                              value={item[column.key]}
+                              numeric={column.kind === 'number'}
+                              align={column.key === 'unitPrice' ? 'end' : 'center'}
+                              onChange={(value) => update(item.id, column.key, value)}
+                            />
+                            {column.key === 'unitPrice' && amountsDiffer(item) && (
+                              <em>수량×단가와 공급금액이 다릅니다</em>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {hasAmount && (
+              <p className="ledger-sum">수량×예상단가 합계 {formatWon(amountTotal)}원. 이 합계는 품목내역 열에 없습니다.</p>
+            )}
 
             <div className="sheet-actions">
               <button type="button" onClick={() => setItems((current) => [...current, emptyLine()])}>
                 품목 추가
               </button>
-              <p>칸을 고친 뒤 내려받으세요. 파일 이름은 품목내역(통합).xls이고, 다섯 열 외에는 들어가지 않습니다.</p>
+              <div className="row-tools">
+                {items.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setItems((current) => current.filter((row) => row.id !== item.id))}
+                  >
+                    {index + 1}번 줄 빼기
+                  </button>
+                ))}
+              </div>
+              <p>표의 다섯 칸을 고치면 화면과 내려받는 파일이 함께 바뀝니다.</p>
             </div>
 
             {previewText && (

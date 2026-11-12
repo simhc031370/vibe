@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Window } from 'happy-dom';
 import { buildWorkbook } from '../src/lib/buildWorkbook';
 import { parseNumber } from '../src/lib/numbers';
@@ -10,7 +11,8 @@ globalThis.DOMParser = window.DOMParser;
 
 const quotePath = process.argv[2];
 const outPath = process.argv[3];
-if (!quotePath || !outPath) throw new Error('usage: export-test-quote.ts <quote.xlsx> <out.xlsx>');
+const templatePath = process.argv[4] ?? resolve('public/품목내역(통합).xls');
+if (!quotePath || !outPath) throw new Error('usage: export-test-quote.ts <quote.xlsx> <out.xls> [template.xls]');
 
 function asBuffer(bytes: Buffer): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -25,6 +27,7 @@ const rows: ExportRow[] = parsed.items.map((item) => ({
   qty: parseNumber(item.qty),
   unitPrice: parseNumber(item.unitPrice),
 }));
-const built = buildWorkbook(rows);
+const template = readFileSync(templatePath);
+const built = buildWorkbook(template.buffer.slice(template.byteOffset, template.byteOffset + template.byteLength) as ArrayBuffer, rows);
 writeFileSync(outPath, built);
 console.log(JSON.stringify({ count: parsed.items.length, notices: parsed.notices, items: parsed.items }, null, 2));

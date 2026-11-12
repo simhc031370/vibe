@@ -64,7 +64,7 @@ function noticesFromStats(stats: Stats, noteHeaders: string[]): string[] {
   }
   if (noteHeaders.length > 0 && stats.keptWithNotes > 0) {
     notices.push(
-      `${noteHeaders.join(', ')} 칸은 품목내역 서식에 없습니다. 참고란에만 보이고 엑셀에는 들어가지 않습니다.`,
+      `${noteHeaders.join(', ')} 칸은 품목내역에 없습니다. 화면의 다섯 열과 엑셀에도 넣지 않습니다.`,
     );
   }
   return notices;
