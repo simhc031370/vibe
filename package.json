@@ -1,0 +1,35 @@
+{
+  "name": "vpdf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "vPDF - a lightweight, browser-based PDF viewer / annotator / organizer / converter inspired by UPDF",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node tests/e2e/smoke.mjs",
+    "postinstall": "node scripts/copy-pdfjs-assets.mjs",
+    "predev": "node scripts/copy-pdfjs-assets.mjs",
+    "prebuild": "node scripts/copy-pdfjs-assets.mjs",
+    "pretest:e2e": "node scripts/copy-pdfjs-assets.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simhc031370/vibe.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "playwright-core": "^1.65.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vPDF</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c4dff'/%3E%3Ctext x='16' y='22' font-size='14' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'%3EvP%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="logo">vP</span><span class="brand-name">vPDF</span></div>
+      <div class="group">
+        <button id="btn-open" data-i18n-title="open" class="btn">
+          <svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+          <span data-i18n="open">Open</span>
+        </button>
+        <button id="btn-save" class="btn primary" disabled>
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16" /></svg>
+          <span data-i18n="save">Save</span>
+        </button>
+        <button id="btn-undo" class="btn icon" data-i18n-title="undo" disabled>
+          <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>
+        </button>
+        <button id="btn-redo" class="btn icon" data-i18n-title="redo" disabled>
+          <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg>
+        </button>
+      </div>
+      <div class="file-name" id="file-name"></div>
+      <div class="group doc-only">
+        <button id="btn-prev" class="btn icon" data-i18n-title="prevPage">
+          <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <input id="page-input" class="page-input" type="text" inputmode="numeric" value="1" />
+        <span class="muted">/ <span id="page-total">0</span></span>
+        <button id="btn-next" class="btn icon" data-i18n-title="nextPage">
+          <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </div>
+      <div class="group doc-only">
+        <button id="btn-zoom-out" class="btn icon" data-i18n-title="zoomOut">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg>
+        </button>
+        <button id="btn-zoom-label" class="btn zoom-label" data-i18n-title="fitWidth">100%</button>
+        <button id="btn-zoom-in" class="btn icon" data-i18n-title="zoomIn">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+      </div>
+      <div class="group doc-only search">
+        <input id="search-input" type="search" data-i18n-placeholder="searchPlaceholder" placeholder="Search" />
+      </div>
+      <div class="group">
+        <button id="btn-lang" class="btn">EN</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="modes">
+        <button class="mode active" data-mode="read">
+          <svg viewBox="0 0 24 24"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z" /></svg>
+          <span data-i18n="modeRead">Read</span>
+        </button>
+        <button class="mode" data-mode="comment">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
+          <span data-i18n="modeComment">Comment</span>
+        </button>
+        <button class="mode" data-mode="organize">
+          <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></svg>
+          <span data-i18n="modeOrganize">Organize</span>
+        </button>
+        <button class="mode" data-mode="tools">
+          <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" /></svg>
+          <span data-i18n="modeTools">Tools</span>
+        </button>
+      </nav>
+
+      <aside class="sidebar doc-only" id="sidebar">
+        <section id="panel-thumbs" class="panel">
+          <h3 data-i18n="pages">Pages</h3>
+          <div id="thumbs" class="thumbs"></div>
+        </section>
+        <section id="panel-search" class="panel hidden">
+          <h3><span data-i18n="searchResults">Search results</span> <span id="search-count" class="badge"></span></h3>
+          <div id="search-results" class="search-results"></div>
+        </section>
+        <section id="panel-tools" class="panel hidden">
+          <details open>
+            <summary data-i18n="toolMerge">Merge PDFs</summary>
+            <p class="hint" data-i18n="toolMergeHint">Append other PDFs to the end of this document.</p>
+            <button class="btn block" id="tool-merge" data-i18n="chooseFiles">Choose files…</button>
+          </details>
+          <details>
+            <summary data-i18n="toolSplit">Split / Extract</summary>
+            <label><span data-i18n="splitEvery">Split every N pages</span><input id="split-n" type="number" min="1" value="1" /></label>
+            <button class="btn block" id="tool-split" data-i18n="split">Split &amp; download</button>
+            <label><span data-i18n="pageRange">Page range</span><input id="extract-range" type="text" placeholder="1-3, 5" /></label>
+            <div class="row">
+              <button class="btn" id="tool-extract" data-i18n="extract">Extract</button>
+              <button class="btn danger" id="tool-delete-range" data-i18n="deletePages">Delete</button>
+            </div>
+          </details>
+          <details>
+            <summary data-i18n="toolWatermark">Watermark</summary>
+            <label><span data-i18n="text">Text</span><input id="wm-text" type="text" value="CONFIDENTIAL" /></label>
+            <div class="row">
+              <label><span data-i18n="color">Color</span><input id="wm-color" type="color" value="#e53935" /></label>
+              <label><span data-i18n="opacity">Opacity</span><input id="wm-opacity" type="range" min="0.05" max="1" step="0.05" value="0.2" /></label>
+            </div>
+            <button class="btn block" id="tool-watermark" data-i18n="apply">Apply</button>
+          </details>
+          <details>
+            <summary data-i18n="toolPageNumbers">Page numbers</summary>
+            <label><span data-i18n="format">Format</span><input id="pn-format" type="text" value="{n} / {total}" /></label>
+            <label>
+              <span data-i18n="position">Position</span>
+              <select id="pn-position">
+                <option value="bottom-center">bottom-center</option>
+                <option value="bottom-right">bottom-right</option>
+                <option value="bottom-left">bottom-left</option>
+                <option value="top-center">top-center</option>
+                <option value="top-right">top-right</option>
+                <option value="top-left">top-left</option>
+              </select>
+            </label>
+            <button class="btn block" id="tool-page-numbers" data-i18n="apply">Apply</button>
+          </details>
+          <details>
+            <summary data-i18n="toolConvert">Convert</summary>
+            <label><span data-i18n="pageRangeOptional">Page range (empty = all)</span><input id="img-range" type="text" placeholder="1-3" /></label>
+            <div class="row">
+              <button class="btn" id="tool-to-png" data-i18n="toPng">PDF → PNG</button>
+              <button class="btn" id="tool-to-jpg" data-i18n="toJpg">PDF → JPG</button>
+            </div>
+            <button class="btn block" id="tool-to-txt" data-i18n="toTxt">PDF → Text (.txt)</button>
+            <button class="btn block" id="tool-from-images" data-i18n="fromImages">Images → PDF</button>
+          </details>
+          <details>
+            <summary data-i18n="toolMetadata">Document properties</summary>
+            <label><span data-i18n="title">Title</span><input id="meta-title" type="text" /></label>
+            <label><span data-i18n="author">Author</span><input id="meta-author" type="text" /></label>
+            <label><span data-i18n="subject">Subject</span><input id="meta-subject" type="text" /></label>
+            <label><span data-i18n="keywords">Keywords</span><input id="meta-keywords" type="text" placeholder="a, b, c" /></label>
+            <button class="btn block" id="tool-metadata" data-i18n="apply">Apply</button>
+          </details>
+          <details>
+            <summary data-i18n="toolOptimize">Optimize (compress)</summary>
+            <p class="hint" data-i18n="toolOptimizeHint">Rewrites the file with object streams and drops unused objects.</p>
+            <button class="btn block" id="tool-optimize" data-i18n="apply">Apply</button>
+          </details>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <div id="comment-bar" class="subbar hidden">
+          <div class="tools" id="annot-tools">
+            <button class="tool active" data-tool="none" data-i18n="toolSelect">Select</button>
+            <button class="tool" data-tool="highlight" data-i18n="toolHighlight">Highlight</button>
+            <button class="tool" data-tool="rect" data-i18n="toolRect">Box</button>
+            <button class="tool" data-tool="ink" data-i18n="toolInk">Pen</button>
+            <button class="tool" data-tool="text" data-i18n="toolText">Text</button>
+            <button class="tool" data-tool="note" data-i18n="toolNote">Note</button>
+            <button class="tool" data-tool="stamp" data-i18n="toolStamp">Stamp</button>
+            <button class="tool" data-tool="whiteout" data-i18n="toolWhiteout">Whiteout</button>
+            <button class="tool" data-tool="image" data-i18n="toolImage">Image</button>
+            <button class="tool" data-tool="eraser" data-i18n="toolEraser">Eraser</button>
+          </div>
+          <div class="tool-opts">
+            <input id="annot-color" type="color" value="#ffd400" data-i18n-title="color" />
+            <label class="inline"><span data-i18n="size">Size</span><input id="annot-size" type="number" min="1" max="96" value="14" /></label>
+            <span id="pending-count" class="badge"></span>
+            <button id="btn-apply-annots" class="btn primary" data-i18n="applyAnnots" disabled>Apply to PDF</button>
+          </div>
+        </div>
+        <div id="organize-bar" class="subbar hidden">
+          <span class="hint" data-i18n="organizeHint">Drag to reorder. Changes are applied when you press Apply.</span>
+          <div class="row">
+            <button id="org-reset" class="btn" data-i18n="reset">Reset</button>
+            <button id="org-apply" class="btn primary" data-i18n="applyChanges">Apply changes</button>
+          </div>
+        </div>
+
+        <div id="welcome" class="welcome">
+          <div class="drop" id="drop-zone">
+            <div class="logo big">vP</div>
+            <h1 data-i18n="welcomeTitle">Read, annotate, organize and convert PDFs</h1>
+            <p class="muted" data-i18n="welcomeSub">Everything runs locally in your browser. Drop a PDF here.</p>
+            <div class="row center">
+              <button class="btn primary" id="welcome-open" data-i18n="openPdf">Open PDF</button>
+              <button class="btn" id="welcome-images" data-i18n="fromImages">Images → PDF</button>
+              <button class="btn" id="welcome-merge" data-i18n="toolMerge">Merge PDFs</button>
+              <button class="btn" id="welcome-sample" data-i18n="sample">Try a sample</button>
+            </div>
+          </div>
+        </div>
+        <div id="viewer" class="viewer hidden"></div>
+        <div id="organizer" class="organizer hidden"></div>
+      </main>
+    </div>
+
+    <div id="drop-overlay" class="drop-overlay hidden"><span data-i18n="dropHere">Drop files to open</span></div>
+    <div id="modal" class="modal hidden">
+      <form class="modal-card" id="modal-form">
+        <h3 id="modal-title"></h3>
+        <textarea id="modal-input" rows="3"></textarea>
+        <div class="row end">
+          <button type="button" class="btn" id="modal-cancel" data-i18n="cancel">Cancel</button>
+          <button type="submit" class="btn primary" id="modal-ok">OK</button>
+        </div>
+      </form>
+    </div>
+    <div id="busy" class="busy hidden"><div class="spinner"></div></div>
+    <div id="toasts" class="toasts"></div>
+
+    <input id="file-pdf" type="file" accept="application/pdf,.pdf" hidden />
+    <input id="file-merge" type="file" accept="application/pdf,.pdf" multiple hidden />
+    <input id="file-images" type="file" accept="image/png,image/jpeg" multiple hidden />
+    <input id="file-annot-image" type="file" accept="image/png,image/jpeg" hidden />
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
